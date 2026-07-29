@@ -8,11 +8,11 @@ Ludus is a reusable game framework designed to provide a common platform for bui
 
 The framework supports:
 
-* multiple board games on a shared platform
-* independent game implementations
-* human and AI players
-* rendering systems
-* AI competitions and tournaments
+- multiple board games on a shared platform
+- independent game implementations
+- human and AI players
+- rendering systems
+- AI competitions and tournaments
 
 Ludus provides the infrastructure. Individual games are built on top of the framework as separate modules.
 
@@ -38,12 +38,12 @@ Ludus Framework
 
 Ludus follows these principles:
 
-* separation of concerns
-* composition over inheritance
-* immutable game states
-* engine-controlled state transitions
-* clear API boundaries
-* modular game development
+- separation of concerns
+- composition over inheritance
+- immutable game states
+- engine-controlled state transitions
+- clear API boundaries
+- modular game development
 
 ## Project Structure
 
@@ -69,11 +69,11 @@ Ludus is currently in early development.
 
 The current focus is:
 
-* defining core domain concepts
-* establishing module structure
-* documenting design principles
-* creating initial APIs
-* setting up the development foundation
+- defining core domain concepts
+- establishing module structure
+- documenting design principles
+- creating initial APIs
+- setting up the development foundation
 
 See the full development plan in the [Roadmap](docs/ROADMAP.md).
 
@@ -83,5 +83,6 @@ Project documentation is available in the [documentation directory](docs/).
 
 Key documents:
 
-* [Roadmap](docs/ROADMAP.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Development Guide](docs/DEVELOPMENT_GUIDE.md)
 
