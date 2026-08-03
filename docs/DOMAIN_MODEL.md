@@ -215,7 +215,7 @@ GameObjectType
 
 ##### Description
 
-A GameInstance represents a single occurrence of a game being played or a completed game that has been played. A GameInstance manages the lifecycle of a specific game by coordinating the GameDefinition, GameConfiguration, RulesEngine, GameHistory, and current GameState. A GameInstance represents one unique play session and is independent from other instances created from the same GameDefinition. The GameInstance does not define game behavior; behavior is provided by the RulesEngine associated with the game.
+A GameInstance represents a single occurrence of a game being played or a completed game that has been played. A GameInstance represents one unique play session and maintains the runtime data associated with that session, including its configuration, history, and current GameState. Multiple GameInstances may be created from the same GameDefinition, each representing an independent play session. A GameInstance does not define game behavior or coordinate game execution. Game behavior is provided by the RulesEngine, while execution is coordinated by the GameEngine.
 
 ##### Owns
 
