@@ -320,7 +320,10 @@ A GameState represents an immutable snapshot of a game at a specific point in ti
 
 ##### Contains
 
-['LocationState', 'GameObjectState', 'GameObjectOwner', 'GameObjectController']
+- LocationState
+- GameObjectState
+- GameObjectOwner
+- GameObjectController
 
 ##### References
 
@@ -468,7 +471,7 @@ LocationState represents the mutable state values associated with a specific Loc
 
 ##### Contains
 
-['mutable location state values']
+- mutable location state values
 
 ##### References
 
@@ -490,7 +493,7 @@ PlayerState represents the mutable state values associated with a specific Playe
 
 ##### Contains
 
-['mutable player state values']
+- mutable player state values
 
 ##### References
 
@@ -547,7 +550,7 @@ GameObjectState represents the mutable state values associated with a specific G
 
 ##### Contains
 
-['stat values']
+- stat values
 
 ##### References
 
