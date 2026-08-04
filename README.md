@@ -86,4 +86,5 @@ Key documents:
 - [Roadmap](docs/ROADMAP.md)
 - [Development Guide](docs/DEVELOPMENT_GUIDE.md)
 - [Domain Model](docs/DOMAIN_MODEL.md)
+- [Execution Model](docs/EXECUTION_MODEL.md)
 

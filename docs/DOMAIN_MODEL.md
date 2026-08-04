@@ -94,6 +94,27 @@ The framework provides the structure required to represent a game. The rules imp
 
 ## Core Concepts
 
+The framework domain model is organized into the following conceptual groups:
+
+- **Game Definition Concepts** describe the immutable structure and characteristics of a game, including the definitions of object types, location types, and configuration options used to create game instances.
+
+- **Runtime Concepts** describe the active lifecycle of a game, including game instances, players, objects, locations, history, and the current state of a game as it progresses.
+
+- **Location State Concepts** describe the mutable values associated with locations within a GameState, representing the current condition of locations as a game evolves.
+
+- **Player State Concepts** describe the mutable values associated with players within a GameState, representing player-specific information that may change during gameplay.
+
+- **Game Object State Concepts** describe the mutable values associated with game objects within a GameState, representing the current condition and attributes of individual objects.
+
+- **Game Object Relationship Concepts** describe the relationships between game objects and other entities, including ownership and control relationships that may change during gameplay.
+
+- **Action Concepts** describe domain actions and their evaluation results, including requested moves, validation outcomes, and state transitions produced by the RulesEngine.
+
+- **Identity Concepts** describe the unique identifiers used to reference domain entities, allowing objects, locations, and players to be referenced without requiring direct object relationships.
+
+- **Domain Service Concepts** describe the services responsible for applying game-specific behavior, evaluating actions, determining legal operations, and producing new GameStates.
+
+Each group contains related concepts that describe a specific aspect of defining, creating, running, and evolving games.
 
 ### Game Definition Concepts
 
@@ -215,7 +236,7 @@ GameObjectType
 
 ##### Description
 
-A GameInstance represents a single occurrence of a game being played or a completed game that has been played. A GameInstance manages the lifecycle of a specific game by coordinating the GameDefinition, GameConfiguration, RulesEngine, GameHistory, and current GameState. A GameInstance represents one unique play session and is independent from other instances created from the same GameDefinition. The GameInstance does not define game behavior; behavior is provided by the RulesEngine associated with the game.
+A GameInstance represents a single occurrence of a game being played or a completed game that has been played. A GameInstance represents one unique play session and maintains the runtime data associated with that session, including its configuration, history, and current GameState. Multiple GameInstances may be created from the same GameDefinition, each representing an independent play session. A GameInstance does not define game behavior or coordinate game execution. Game behavior is provided by the RulesEngine, while execution is coordinated by the GameEngine.
 
 ##### Owns
 
@@ -227,15 +248,15 @@ A GameInstance represents a single occurrence of a game being played or a comple
 ##### References
 
 - GameDefinition
-- RulesEngine
 
 ##### Does Not Own
 
-- GameDefinition
 - RulesEngine
-- Location
+- Move
+- MoveResolution
 - Player
 - GameObject
+- Location
 
 ##### Example
 
@@ -299,7 +320,10 @@ A GameState represents an immutable snapshot of a game at a specific point in ti
 
 ##### Contains
 
-['LocationState', 'GameObjectState', 'GameObjectOwner', 'GameObjectController']
+- LocationState
+- GameObjectState
+- GameObjectOwner
+- GameObjectController
 
 ##### References
 
@@ -447,7 +471,7 @@ LocationState represents the mutable state values associated with a specific Loc
 
 ##### Contains
 
-['mutable location state values']
+- mutable location state values
 
 ##### References
 
@@ -469,7 +493,7 @@ PlayerState represents the mutable state values associated with a specific Playe
 
 ##### Contains
 
-['mutable player state values']
+- mutable player state values
 
 ##### References
 
@@ -526,7 +550,7 @@ GameObjectState represents the mutable state values associated with a specific G
 
 ##### Contains
 
-['stat values']
+- stat values
 
 ##### References
 
@@ -800,46 +824,56 @@ The following structural diagram illustrates the relationships between the core 
 ```mermaid
 erDiagram
 
-    GAME_DEFINITION ||--o{ LOCATION_TYPE : owns
-    GAME_DEFINITION ||--o{ GAME_OBJECT_TYPE : owns
+    GameDefinition ||--o{ LocationType : owns
+    GameDefinition ||--o{ GameObjectType : owns
 
-    GAME_CONFIGURATION }o--|| GAME_DEFINITION : references
-    GAME_CONFIGURATION ||--|| GAME_STATE : creates
 
-    GAME_INSTANCE }o--|| GAME_DEFINITION : references
-    GAME_INSTANCE ||--|| GAME_CONFIGURATION : uses
-    GAME_INSTANCE ||--|| GAME_STATE : manages
-    GAME_INSTANCE ||--|| GAME_HISTORY : contains
-    GAME_INSTANCE }o--|| RULES_ENGINE : uses
+    GameConfiguration }o--|| GameDefinition : references
+    GameConfiguration ||--|| GameState : creates
 
-    GAME_HISTORY }o--|| GAME_STATE : starts_from
-    GAME_HISTORY ||--o{ MOVE : contains
 
-    GAME_STATE ||--o{ LOCATION_STATE : contains
-    GAME_STATE ||--o{ GAME_OBJECT_STATE : contains
-    GAME_STATE ||--o{ PLAYER_STATE : contains
-    GAME_STATE ||--o{ GAME_OBJECT_OWNER : contains
-    GAME_STATE ||--o{ GAME_OBJECT_CONTROLLER : contains
+    GameInstance }o--|| GameDefinition : references
+    GameInstance ||--|| GameConfiguration : uses
+    GameInstance ||--|| GameState : tracks
+    GameInstance ||--|| GameHistory : owns
 
-    LOCATION }o--|| LOCATION_TYPE : defined_by
 
-    GAME_OBJECT }o--|| GAME_OBJECT_TYPE : defined_by
+    GameHistory }o--|| GameState : references_initial
+    GameHistory ||--o{ Move : owns
 
-    GAME_OBJECT_OWNER }o--|| GAME_OBJECT : assigns
-    GAME_OBJECT_OWNER }o--|| PLAYER : owned_by
 
-    GAME_OBJECT_CONTROLLER }o--|| GAME_OBJECT : controls
-    GAME_OBJECT_CONTROLLER }o--|| PLAYER : controlled_by
+    GameState }o--o{ LocationState : references
+    GameState }o--o{ PlayerState : references
+    GameState }o--o{ GameObjectState : references
+    GameState }o--o{ GameObjectOwner : references
+    GameState }o--o{ GameObjectController : references
 
-    MOVE }o--|| PLAYER : requested_by
-    MOVE }o--|| GAME_OBJECT : affects
-    MOVE }o--|| GAME_STATE : evaluated_against
 
-    MOVE_RESOLUTION }o--|| MOVE : resolves
-    MOVE_RESOLUTION }o--|| GAME_STATE : produces
+    Location }o--|| LocationType : references
 
-    RULES_ENGINE }o--|| GAME_DEFINITION : interprets
-    RULES_ENGINE ||--o{ MOVE_RESOLUTION : creates
-    RULES_ENGINE ||--o{ GAME_STATE : creates
+    GameObject }o--|| GameObjectType : references
+
+
+    LocationState }o--|| Location : references
+
+    PlayerState }o--|| Player : references
+
+    GameObjectState }o--|| GameObject : references
+
+
+    GameObjectOwner }o--|| Player : references
+    GameObjectOwner }o--|| GameObject : references
+
+    GameObjectController }o--|| Player : references
+    GameObjectController }o--|| GameObject : references
+
+
+    Move }o--|| Player : references
+    Move }o--|| GameObject : references
+    Move }o--|| GameState : evaluated_against
+
+
+    MoveResolution }o--|| Move : references
+    MoveResolution }o--|| GameState : produces
 ```
 
