@@ -327,7 +327,7 @@ A GameState represents an immutable snapshot of a game at a specific point in ti
 
 ##### References
 
-- LocationID
+- LocationId
 - PlayerId
 - GameObjectId
 
@@ -651,7 +651,6 @@ A Move represents an immutable request to perform a domain action that may trans
 
 ##### Owns
 
-- MoveType
 - Move parameters
 
 ##### References
@@ -823,24 +822,18 @@ The following structural diagram illustrates the relationships between the core 
 
 ```mermaid
 erDiagram
-
     GameDefinition ||--o{ LocationType : owns
     GameDefinition ||--o{ GameObjectType : owns
-
-
     GameConfiguration }o--|| GameDefinition : references
     GameConfiguration ||--|| GameState : creates
-
 
     GameInstance }o--|| GameDefinition : references
     GameInstance ||--|| GameConfiguration : uses
     GameInstance ||--|| GameState : tracks
     GameInstance ||--|| GameHistory : owns
 
-
     GameHistory }o--|| GameState : references_initial
     GameHistory ||--o{ Move : owns
-
 
     GameState }o--o{ LocationState : references
     GameState }o--o{ PlayerState : references
@@ -848,11 +841,9 @@ erDiagram
     GameState }o--o{ GameObjectOwner : references
     GameState }o--o{ GameObjectController : references
 
-
     Location }o--|| LocationType : references
 
     GameObject }o--|| GameObjectType : references
-
 
     LocationState }o--|| Location : references
 
@@ -860,18 +851,15 @@ erDiagram
 
     GameObjectState }o--|| GameObject : references
 
-
     GameObjectOwner }o--|| Player : references
     GameObjectOwner }o--|| GameObject : references
 
     GameObjectController }o--|| Player : references
     GameObjectController }o--|| GameObject : references
 
-
     Move }o--|| Player : references
     Move }o--|| GameObject : references
     Move }o--|| GameState : evaluated_against
-
 
     MoveResolution }o--|| Move : references
     MoveResolution }o--|| GameState : produces
