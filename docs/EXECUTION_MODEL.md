@@ -426,7 +426,7 @@ Regardless of the source of a Move, all game progression follows the same execut
 
 External systems may influence which Moves are provided, but all state transitions remain controlled by the execution framework and RulesEngine.
 
-## Summary
+### Summary
 
 The Ludus execution model treats every supported game as a deterministic sequence of immutable state transitions. The framework coordinates execution while remaining agnostic to game-specific behavior. Games define their behavior through RulesEngine implementations, allowing the same execution model to support simple games such as Tic-Tac-Toe and Chess as well as significantly more complex games such as Risk or Magic: The Gathering.
 
