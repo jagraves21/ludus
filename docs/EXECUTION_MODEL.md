@@ -105,7 +105,6 @@ The GameEngine is the coordinator of the execution process. It requests Moves fr
 The GameEngine does not interpret game-specific behavior, and none of the execution components directly modify an existing GameState. Game-specific behavior is implemented by the RulesEngine, while the execution framework is responsible for coordinating the resulting state transitions.
 
 ```mermaid
-%%{init: {"themeCSS": ".edgeLabel { background-color: transparent !important; } .edgeLabel rect { fill: transparent !important; }"}}%%
 flowchart TD
 	GameEngine -->|coordinates| GameInstance
 	GameEngine -->|requests| MoveProvider
