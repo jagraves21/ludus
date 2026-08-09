@@ -6,12 +6,12 @@ The Ludus execution model defines how a game progresses from initialization to c
 
 The execution model is intentionally independent of:
 
--   rendering
--   networking
--   user interfaces
--   artificial intelligence    
--   replay viewers
--   event systems
+- rendering
+- networking
+- user interfaces
+- artificial intelligence    
+- replay viewers
+- event systems
 
 These systems interact with the execution model through the framework's public APIs but do not participate in game state evaluation.
 
@@ -19,13 +19,13 @@ These systems interact with the execution model through the framework's public A
 
 The execution model is designed to satisfy several fundamental goals.
 
--   extensibility across many game types
--   deterministic execution
--   immutable game state
--   reproducible simulations
--   replayable games
--   support for human and automated players
--   efficient AI search
+- extensibility across many game types
+- deterministic execution
+- immutable game state
+- reproducible simulations
+- replayable games
+- support for human and automated players
+- efficient AI search
 
 Every execution path through the framework should satisfy these goals.
 
@@ -37,11 +37,11 @@ The execution model never modifies an existing GameState. Every accepted Move pr
 
 This enables:
 
--   deterministic replay
--   branching simulations    
--   debugging
--   parallel analysis
--   AI search algorithms
+- deterministic replay
+- branching simulations    
+- debugging
+- parallel analysis
+- AI search algorithms
 
 ### Behavior Lives in the Rules Engine
 
@@ -51,48 +51,78 @@ The framework coordinates execution. The RulesEngine determines game behavior. G
 
 The framework owns execution. Games provide behavior. The framework is responsible for:
 
--   creating game instances
--   requesting moves
--   invoking the RulesEngine
--   updating history
--   advancing execution
--   determining when execution terminates
+- creating game instances
+- requesting moves
+- invoking the RulesEngine
+- updating history
+- advancing execution
+- determining when execution terminates
 
 The framework is not responsible for deciding how a particular game is played.
 
+
+### State Transition Model
+
+The fundamental operation of the execution model is the transition from one immutable GameState to the next. The GameEngine provides the current GameState and a Move to the RulesEngine. The RulesEngine evaluates the Move according to the rules of the game and produces a MoveResolution. The resolution determines whether the Move is accepted and, when accepted, contains the resulting GameState. An accepted Move produces a new GameState. The existing GameState is never modified.
+
+```mermaid
+flowchart LR
+	StateA["Current GameState"]
+	Move["Move"]
+	Rules["RulesEngine"]
+	Resolution["MoveResolution"]
+	StateB["New GameState"]
+
+	StateA --> Rules
+	Move --> Rules
+	Rules --> Resolution
+
+	Resolution -->|Accepted| StateB
+	Resolution -->|Rejected| StateA
+
+```
+
+When a Move is accepted, the resulting GameState is a new immutable state derived from the current GameState. When a Move is rejected, the current GameState remains unchanged.
+
+This establishes the primary execution invariant: _Game execution never mutates an existing GameState. Execution only advances by producing new immutable GameStates._
+
+GameHistory contains the initial GameState and the ordered sequence of accepted Moves. Intermediate states are derived by replaying those Moves through the RulesEngine, beginning with the initial GameState, thus providing a deterministic reconstruction model. This allows game history to remain compact while supporting replay, debugging, simulation, verification, and analysis without requiring every intermediate GameState to be stored.
+
 ## Execution Services
 
-The execution model is implemented through a set of framework services that coordinate the progression of a game while maintaining separation between execution, game state, and game-specific behavior. Execution services are responsible for coordinating gameplay; they do not define the rules of a game, own immutable domain definitions, or directly modify game state.
+The execution model is implemented through a small set of framework components that collaborate to advance a game from one immutable GameState to the next. Each component has a distinct responsibility within the execution process.
 
-The primary execution services are:
+The primary execution components are:
 
--   GameEngine
--   GameInstance
--   RulesEngine
--   MoveProvider
--   GameHistory
+- **GameEngine** coordinates game execution and controls the execution lifecycle.
+- **GameInstance** represents the state of a running game, including its current GameState, GameConfiguration, and GameHistory.
+- **RulesEngine** evaluates Move objects against a GameState and produces a MoveResolution according to the rules of the game.
+- **MoveProvider** supplies Move objects to the GameEngine using the current GameState as decision context.
+- **GameHistory** records the accepted sequence of Move objects that produced the game's state progression.    
 
-Together, these services transform a sequence of player decisions into a deterministic sequence of immutable GameStates.
+The GameEngine is the coordinator of the execution process. It requests Moves from a MoveProvider, submits them to the RulesEngine, processes the resulting MoveResolution, advances the GameInstance to the resulting immutable GameState, and records accepted transitions in the GameHistory.
+
+The GameEngine does not interpret game-specific behavior, and none of the execution components directly modify an existing GameState. Game-specific behavior is implemented by the RulesEngine, while the execution framework is responsible for coordinating the resulting state transitions.
 
 ```mermaid
 flowchart TD
-	GameEngine --> GameInstance
-	GameEngine --> RulesEngine
-	GameEngine --> MoveProvider
+	GameEngine -->|coordinates| GameInstance
+	GameEngine -->|requests| MoveProvider
+	GameEngine -->|evaluates| RulesEngine
 
-	GameInstance --> GameState
-	GameInstance --> GameHistory
+	MoveProvider -->|provides| Move
+	GameEngine -->|submits| Move
 
-	MoveProvider --> Move
-	
-	Move --> RulesEngine
+	GameInstance -->|current| GameState
+	GameEngine -->|provides| GameState
 
-	RulesEngine --> MoveResolution
-	
-	MoveResolution --> GameInstance
+	RulesEngine -->|produces| MoveResolution
+	GameEngine -->|applies| MoveResolution
 
-	GameState --> RulesEngine
+	GameInstance -->|records| GameHistory
 ```
+
+Together, these components transform a sequence of decisions into a deterministic sequence of immutable `GameState` transitions.
 
 ### Execution Service Concepts
 
@@ -100,17 +130,18 @@ flowchart TD
 
 ##### Description
 
-A GameEngine is a framework service responsible for coordinating the execution of a game session. A GameEngine manages the execution lifecycle by requesting Moves, submitting Moves to the RulesEngine for evaluation, processing MoveResolutions, replacing the current GameState with resulting immutable GameStates, and updating GameHistory. A GameEngine does not contain game-specific rules, interpret the meaning of Moves, or directly modify existing GameStates. Instead, it coordinates the interaction between execution services and domain concepts while preserving the framework guarantees of immutable state transitions and deterministic execution.
+A GameEngine is a framework service responsible for coordinating the execution of a game session. A GameEngine manages the execution lifecycle by requesting Moves from a MoveProvider, submitting Moves and the current GameState to the RulesEngine for evaluation, processing MoveResolutions, advancing the GameInstance to resulting immutable GameStates, and recording accepted Moves in GameHistory. A GameEngine does not contain game-specific rules, interpret the meaning of Moves, or modify existing GameStates. Instead, it coordinates the interaction between execution components and domain concepts while preserving the framework guarantees of immutable state transitions and deterministic execution.
 
 ##### Responsibilities
 
 - coordinate game execution
-- provide execution context for a running GameInstance
+- manage the execution lifecycle of a GameInstance
 - request Moves from MoveProviders
-- submit Moves to the RulesEngine
+- provide the current GameState as decision context
+- submit Moves and GameStates to the RulesEngine
 - process MoveResolutions
-- replace the current GameState with resulting immutable GameStates
-- update GameHistory
+- advance the GameInstance to resulting immutable GameStates
+- record accepted Moves in GameHistory
 - detect when execution reaches a terminal state
 
 ##### References
@@ -147,17 +178,20 @@ GameEngine
     using:
         RulesEngine
         MoveProvider
+
+    records:
+        GameHistory
 ```
 
 #### MoveProvider
 
 ##### Description
 
-A MoveProvider is a framework service responsible for providing Moves to a GameEngine during game execution. A MoveProvider represents the source of a decision within a game session and may provide Moves generated by a human player, artificial intelligence agent, network client, replay system, or automated process. A MoveProvider does not evaluate whether a Move is valid, apply game rules, modify GameStates, or control game execution. Instead, it produces Move requests that are evaluated by the RulesEngine through the GameEngine.
+A MoveProvider is an execution abstraction responsible for supplying Moves to a GameEngine during game execution. A MoveProvider represents the source of a decision within a game session and may be implemented by a human player interface, artificial intelligence agent, network client, replay system, automated test, or other decision-making system. A MoveProvider receives the current GameState as decision context and produces a Move representing an intended action. It does not evaluate whether a Move is valid, apply game rules, modify GameStates, or control execution. Moves are evaluated by the RulesEngine through the GameEngine.
 
 ##### Responsibilities
 
-- provide Moves during game execution
+- supply Moves during game execution
 - receive the current GameState as decision context
 - produce a Move representing an intended action
 - support different sources of decision making
@@ -187,13 +221,13 @@ A MoveProvider is a framework service responsible for providing Moves to a GameE
 ```text
 MoveProvider
 
-    provides:
+    supplies:
         Move
 
     to:
         GameEngine
 
-    using context from:
+    using:
         GameState
 ```
 
@@ -203,42 +237,43 @@ During execution, these services collaborate as follows:
 
 ```mermaid
 sequenceDiagram
-	participant GC as GameConfiguration
+	participant GE as GameEngine
 	participant GI as GameInstance
-	participant MP as Move Provider
+	participant MP as MoveProvider
 	participant RE as RulesEngine
 	participant GH as GameHistory
 
-	GC->>GI: Create Initial GameState
-	GI->>GH: Initialize History
+	GE->>GI: Initialize
+	GI-->>GE: Initial GameState
+	GE->>GH: Initialize with Initial GameState
 
 	loop Until Terminal State
+		GE->>MP: Request Move(GameState)
+		MP-->>GE: Move
 
-		GI->>MP: Request Move
-		MP-->>GI: Move
-
-		GI->>RE: Evaluate(GameState, Move)
+		GE->>RE: Evaluate(GameState, Move)
+		RE-->>GE: MoveResolution
 
 		alt Move Accepted
-			RE-->>GI: MoveResolution(New GameState)
-			GI->>GH: Record Move
-			GI->>GI: Replace Current GameState
+			GE->>GI: Advance to New GameState
+			GE->>GH: Record accepted Move
 		else Move Rejected
-			RE-->>GI: MoveResolution(Current GameState)
+			GE->>GI: Preserve Current GameState
 		end
 
+		GE->>GE: Check terminal state
 	end
 
-	GI-->>MP: Game Complete
+	GE-->>GI: Execution Complete
 ```
 
 The execution services work together to maintain the core Ludus guarantees:
 
--   deterministic execution
--   immutable state transitions
--   separation of rules and infrastructure
--   support for multiple move sources
--   replayable game progression
+- deterministic execution
+- immutable state transitions
+- separation of rules and infrastructure
+- support for multiple move sources
+- replayable game progression
 
 ## Execution Lifecycle
 
@@ -261,16 +296,16 @@ flowchart TD
 	MoveAcquisition["Move Acquisition"]
 	RulesEvaluation["Rules Evaluation"]
 	StateAdvancement["State Advancement"]
-	ExecutionContinuation["Execution Continuation"]
-	TerminalState["Terminal State"]
+	Terminal{"Terminal State?"}
+	Complete["Execution Complete"]
 
 	Initialization --> MoveAcquisition
 	MoveAcquisition --> RulesEvaluation
 	RulesEvaluation --> StateAdvancement
-	StateAdvancement --> ExecutionContinuation
+	StateAdvancement --> Terminal
 
-	ExecutionContinuation --> MoveAcquisition
-	ExecutionContinuation --> TerminalState
+	Terminal -->|No| MoveAcquisition
+	Terminal -->|Yes| Complete
 ```
 
 ### Game Initialization
