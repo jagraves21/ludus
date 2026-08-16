@@ -1,865 +1,915 @@
-# Ludus Event Model
+# Ludus Entity Reference
 
 ## Purpose
 
-The Ludus event system provides a mechanism for framework components to communicate observations about game execution without creating direct dependencies between systems. Events allow independent systems such as   rendering,   networking, replay, and debugging to observe game execution while preserving the separation between game logic and external concerns.
+This document defines the detailed reference information for the core Ludus entities, services, and concepts.
 
-Events are descriptive records of things that have occurred within the framework. They do not perform actions, determine game behavior, or modify game state. The event model exists to support the following framework capabilities:
+The Domain Model and Execution Model describe architectural concepts and interactions. This document provides the detailed definitions of individual types, including their responsibilities, ownership boundaries, references, and examples.
 
--rendering updates
--network synchronization
-- replay recording
-- analytics collection
-- debugging tools
-- tournament infrastructure
-- execution monitoring
-- future framework integrations
+## Core Concepts
 
-The event model follows the same architectural principles as the rest of the Ludus framework:
+### Game Definition Concepts
 
-- immutable data
-- deterministic execution
-- separation of concerns
-- engine-controlled state transitions
-- gamebehavior contained within rules implementations
-- external systems interacting through framework contracts
-
-# Ludus Event Model
-
-## Purpose
-
-The Ludus event system provides a mechanism for observing game execution without creating direct dependencies between the components that participate in or observe that execution. An event is an immutable notification that something meaningful has occurred during game execution. Events describe completed occurrences within the framework. They do not perform actions, determine game behavior, modify game state, or control execution.
-
-The event model is independent of the systems that consume events. A consumer may use events for rendering, networking, replay, analytics, debugging, tournament infrastructure, or other purposes, but the event model itself has no knowledge of those systems.
-
-The event model follows the same architectural principles as the rest of the Ludus framework:
-
-* immutable data
-* deterministic execution
-* separation of concerns
-* engine-controlled state transitions
-* game behavior contained within rules implementations
-* external systems interacting through framework contracts
-
-## Game Execution Lifecycle
-
-Events correspond to meaningful points in the lifecycle of game execution.
-
-The execution lifecycle is:
-
-```mermaid
-flowchart TD
-	GameInitialization["Game Initialization"]
-	GameInitializedEvent(["GameInitializedEvent"])
-
-	StateUpdatedEventInitial(["StateUpdatedEvent"])
-
-	MoveAcquisition["Move Acquisition"]
-	MoveAcquiredEvent(["MoveAcquiredEvent"])
-
-	MoveResolution["Move Resolution"]
-	MoveResolutionEvent(["MoveResolutionEvent"])
-
-	StateAdvancement["State Advancement"]
-	StateUpdatedEvent(["StateUpdatedEvent"])
-
-	ExecutionContinuation["Execution Continuation"]
-	TerminalState["Terminal State"]
-	TerminalStateReachedEvent(["TerminalStateReachedEvent"])
-
-	GameInitialization --> GameInitializedEvent
-	GameInitializedEvent --> StateUpdatedEventInitial
-	StateUpdatedEventInitial --> MoveAcquisition
-
-	MoveAcquisition --> MoveAcquiredEvent
-	MoveAcquiredEvent --> MoveResolution
-	MoveResolution --> MoveResolutionEvent
-	MoveResolutionEvent --> StateAdvancement
-	StateAdvancement --> StateUpdatedEvent
-
-	StateUpdatedEvent --> ExecutionContinuation
-
-	ExecutionContinuation --> MoveAcquisition
-	ExecutionContinuation --> TerminalState
-	TerminalState --> TerminalStateReachedEvent
-```
-
-The initial GameState is represented by the first StateUpdatedEvent following GameInitializedEvent. Each subsequent successful state transition produces another StateUpdatedEvent. A rejected Move produces a MoveResolutionEvent but does not produce a StateUpdatedEvent, because the current GameState has not changed. When execution reaches a terminal state, TerminalStateReachedEvent is produced.
-
-## Event Hierarchy
-
-Events are organized into categories according to the aspect of game execution they describe. The event categories and their events are:
-
-```mermaid
-flowchart TD
-	Event["Event"]
-
-	GameLifecycleEvents["Game Lifecycle Events"]
-	GameInitializedEvent["GameInitializedEvent"]
-	TerminalStateReachedEvent["TerminalStateReachedEvent"]
-
-	MoveEvents["Move Events"]
-	MoveAcquiredEvent["MoveAcquiredEvent"]
-	MoveResolutionEvent["MoveResolutionEvent"]
-
-	StateEvents["State Events"]
-	StateUpdatedEvent["StateUpdatedEvent"]
-
-	Event --> GameLifecycleEvents
-	GameLifecycleEvents --> GameInitializedEvent
-	GameLifecycleEvents --> TerminalStateReachedEvent
-
-	Event --> MoveEvents
-	MoveEvents --> MoveAcquiredEvent
-	MoveEvents --> MoveResolutionEvent
-
-	Event --> StateEvents
-	StateEvents --> StateUpdatedEvent
-```
-
-The categories are organizational concepts and do not represent events themselves. The concrete events are the notifications produced during game execution.
-
-### GameLifecycleEvent
-
-`GameLifecycleEvent` represents an event associated with the lifecycle of a game.
-
-It contains events that describe significant lifecycle transitions of a game instance.
-
-Current lifecycle events include:
-
-* `GameInitializedEvent`
-* `TerminalStateReachedEvent`
-
-### MoveEvent
-
-`MoveEvent` represents an event associated with the acquisition and resolution of a `Move`.
-
-It contains events that describe meaningful points in the processing of a move.
-
-Current move events include:
-
-* `MoveAcquiredEvent`
-* `MoveResolutionEvent`
-
-### StateEvent
-
-`StateEvent` represents an event associated with changes to the current `GameState`.
-
-It currently contains:
-
-* `StateUpdatedEvent`
-
-`StateUpdatedEvent` represents the point at which the current `GameState` has been replaced by a new immutable `GameState`.
-
-## Event Sequence
-
-For a game that progresses through multiple moves, the event sequence is:
-
-```text
-GameInitializedEvent
-StateUpdatedEvent
-
-MoveAcquiredEvent
-MoveResolutionEvent
-StateUpdatedEvent
-
-MoveAcquiredEvent
-MoveResolutionEvent
-StateUpdatedEvent
-
-...
-
-TerminalStateReachedEvent
-```
-
-If a `Move` is rejected, the sequence is:
-
-```text
-MoveAcquiredEvent
-MoveResolutionEvent
-```
-
-with no `StateUpdatedEvent`, because the `GameState` remains unchanged.
-
-The event sequence therefore describes what actually occurred during execution rather than exposing internal implementation steps.
-
-## Event Model Concepts
-
-### Event Concepts
-
-#### Event
+#### GameDefinition
 
 ##### Description
 
-An Event represents an immutable observation of something that occurred during framework execution. Events describe completed facts about execution after they happen. An Event does not request actions, determine game behavior, modify GameState, or replace the authoritative game state model. Events provide a communication mechanism between framework execution services and external systems such as rendering, networking, replay, analytics, debugging, and tournament infrastructure while preserving separation of concerns and deterministic execution.
+A [GameDefinition](#gamedefinition) represents the immutable definition of a game supported by the framework. A [GameDefinition](#gamedefinition) describes the static characteristics of a game, including the [GameObjectTypes](#gameobjecttype) and [LocationTypes](#locationtype) that define the objects and locations that may exist within the game. It provides the immutable structural information required by other framework components, such as the [RulesEngine](#rulesengine), to interpret and evolve [GameStates](#gamestate). A [GameDefinition](#gamedefinition) does not represent a running game instance, a specific [GameState](#gamestate), or the behavior used to apply game rules.
 
 ##### Owns
 
-- event type
-- execution context
-- event metadata
-
-##### References
-
-- GameInstance
-- GameState
-- Move
+- [LocationType](#locationtype)
+- [GameObjectType](#gameobjecttype)
 
 ##### Does Not Own
 
-- GameInstance
-- GameState
-- RulesEngine
-- Move
-- GameHistory
+- [Location](#location)
+- [Player](#player)
+- [GameObject](#gameobject)
+- [RulesEngine](#rulesengine)
+- [GameConfiguration](#gameconfiguration)
+- [GameState](#gamestate)
 
 ##### Example
 
 ```text
-Event
+GameDefinition
 
-    Type:
-        StateTransitionEvent
+    Chess
 
-    Context:
-        GameInstance: Chess Match #1024
+        GameObjectTypes:
+            King
+            Queen
+            Bishop
+            Knight
+            Rook
+            Pawn
 
-    Data:
-        Previous GameState:
-            Position 41
+        LocationTypes:
+            Board Square
+```
 
-        New GameState:
-            Position 42
+#### GameConfiguration
 
-        Move:
+##### Description
+
+A [GameConfiguration](#gameconfiguration) represents the immutable options selected when creating a new game instance. A [GameConfiguration](#gameconfiguration) references a [GameDefinition](#gamedefinition) and defines how that game is initialized. It is responsible for producing the initial [GameState](#gamestate). A [GameConfiguration](#gameconfiguration) may define the game variant, initial setup, player configuration, and other creation-time options. The resulting [GameState](#gamestate) is managed independently by the [RulesEngine](#rulesengine). A [GameConfiguration](#gameconfiguration) does not represent the current state of a game. Multiple [GameConfigurations](#gameconfiguration) may reference the same [GameDefinition](#gamedefinition) while producing different initial [GameStates](#gamestate) (e.g., standard chess vs Fischer random).
+
+##### References
+
+- [GameDefinition](#gamedefinition)
+
+##### Creates
+
+- [GameState](#gamestate)
+
+##### Does Not Own
+
+- [GameDefinition](#gamedefinition)
+- [GameState](#gamestate)
+- [Location](#location)
+- [Player](#player)
+- [GameObject](#gameobject)
+
+#### LocationType
+
+##### Description
+
+A [LocationType](#locationtype) defines the immutable characteristics shared by all [Locations](#location) of the same type. A [LocationType](#locationtype) identifies what kind of location a [Location](#location) represents, such as a board space, inventory, territory, hand, deck, or discard pile. A [LocationType](#locationtype) contains the static attributes required to interpret [Locations](#location) of that type but does not represent a specific [Location](#location) within a game and does not contain mutable state.
+
+##### Owns
+
+- unique type identity
+- immutable attributes
+
+##### Does Not Own
+
+- [Location](#location)
+- [Player](#player)
+- [GameObject](#gameobject)
+- [GameState](#gamestate)
+
+#### GameObjectType
+
+##### Description
+
+A [GameObjectType](#gameobjecttype) defines the immutable characteristics shared by all [GameObjects](#gameobject) of the same type. A [GameObjectType](#gameobjecttype) identifies what kind of object a [GameObject](#gameobject) represents, such as a chess piece, playing card, territory, unit, or resource. A [GameObjectType](#gameobjecttype) contains the static attributes and rules-related information required to interpret objects of that type. A [GameObjectType](#gameobjecttype) does not represent an individual object within a game and does not contain mutable state.
+
+##### Owns
+
+- unique type identity
+- immutable attributes
+
+##### Does Not Own
+
+- [GameObject](#gameobject)
+- [GameObjectState](#gameobjectstate)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+- [GameState](#gamestate)
+
+##### Example
+
+```text
+GameObjectType
+
+    Iron Helm
+
+    Immutable Attributes:
+        Material: Iron
+        Armor Rating: 5
+        Equipment Slot: Head
+        Maximum Durability: 100
+```
+
+### Runtime Concepts
+
+#### GameInstance
+
+##### Description
+
+A [GameInstance](#gameinstance) represents a single occurrence of a game being played or a completed game that has been played. A [GameInstance](#gameinstance) represents one unique play session and maintains the runtime data associated with that session, including its configuration, history, and current [GameState](#gamestate). Multiple [GameInstances](#gameinstance) may be created from the same [GameDefinition](#gamedefinition), each representing an independent play session. A [GameInstance](#gameinstance) does not define game behavior or coordinate game execution. Game behavior is provided by the [RulesEngine](#rulesengine), while execution is coordinated by the [GameEngine](#gameengine).
+
+##### Owns
+
+- [GameConfiguration](#gameconfiguration)
+- Initial [GameState](#gamestate)
+- Current [GameState](#gamestate)
+- [GameHistory](#gamehistory)
+
+##### References
+
+- [GameDefinition](#gamedefinition)
+
+##### Does Not Own
+
+- [RulesEngine](#rulesengine)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [Player](#player)
+- [GameObject](#gameobject)
+- [Location](#location)
+
+##### Example
+
+```text
+GameInstance
+
+    Chess Match #1024
+
+    GameDefinition:
+        Chess
+
+    GameConfiguration:
+        Standard Chess
+
+    RulesEngine:
+        ChessRulesEngine
+
+    Current GameState:
+        Move 42 Position
+
+    GameHistory:
+        Initial GameState:
+            Starting Chess Position
+
+        Moves:
             e4
+            e5
+            Nf3
+            Nc6
+            ...
 ```
 
-### Event Context Concepts
-
-#### GameEvent
+#### GameHistory
 
 ##### Description
 
-A GameEvent represents an Event associated with a specific game execution. A GameEvent provides context identifying the GameInstance and execution point where the Event occurred. GameEvents allow external systems to observe game execution without creating direct dependencies on the internal execution process.
+A [GameHistory](#gamehistory) represents the sequence of accepted [Moves](#move) that transformed an initial [GameState](#gamestate) into the current state of a game. A [GameHistory](#gamehistory) contains the initial [GameState](#gamestate) and the ordered sequence of [Moves](#move) applied after that state. Intermediate [GameStates](#gamestate) are not owned by [GameHistory](#gamehistory) and are derived by applying [Moves](#move) through the [RulesEngine](#rulesengine). [GameHistory](#gamehistory) does not define game behavior and does not directly modify [GameStates](#gamestate).
+
+##### Owns
+
+- Ordered Sequence of [Moves](#move)
 
 ##### References
 
-- GameInstance
-- GameState
-- Move
+- Initial [GameState](#gamestate)
+
+##### Uses
+
+- [RulesEngine](#rulesengine)
 
 ##### Does Not Own
 
-- GameInstance
-- GameState
-- RulesEngine
-- GameHistory
+- Derived [GameStates](#gamestate)
+- [MoveResolution](#moveresolution)
 
-#### ExecutionEvent
+#### GameState
 
 ##### Description
 
-An ExecutionEvent represents an Event generated during the lifecycle of game execution. ExecutionEvents describe activity performed by framework execution services such as the GameEngine, including execution lifecycle changes, move requests, move submissions, move evaluation, and execution completion. An ExecutionEvent describes framework activity that has occurred and does not determine game behavior, modify GameState, or control execution.
+A [GameState](#gamestate) represents an immutable snapshot of a game at a specific point in time. A [GameState](#gamestate) contains all mutable information required to completely describe the current position of a game, including the player whose turn it currently is. A [GameState](#gamestate) does not contain the history of how it was reached or the rules that determine how the game progresses. Applying a [Move](#move) never modifies an existing [GameState](#gamestate). Instead, the [RulesEngine](#rulesengine) produces a new [GameState](#gamestate) representing the result of applying a [Move](#move), including any changes to the current player turn.
 
-##### Responsibilities
+##### Contains
 
-- represent framework execution activity
-- provide execution lifecycle information to event consumers
-- identify relevant execution context
+- [LocationState](#locationstate)
+- [GameObjectState](#gameobjectstate)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
 
 ##### References
 
-- GameInstance
-- GameState
-- Move
-- MoveResolution
-- GameEngine
+- [LocationId](#locationid)
+- [PlayerId](#playerid)
+- [GameObjectId](#gameobjectid)
 
 ##### Does Not Own
 
-- GameInstance
-- GameState
-- Move
-- MoveResolution
-- RulesEngine
-- GameHistory
+- [GameDefinition](#gamedefinition)
+- [GameConfiguration](#gameconfiguration)
+- [RulesEngine](#rulesengine)
+- [Move](#move)
+- [GameHistory](#gamehistory)
 
 ##### Example
-
-```text
-ExecutionEvent
-
-    Type:
-        MoveSubmittedEvent
-
-    Context:
-        GameInstance:
-            Chess Match #1024
-
-    Move:
-        e4
-
-    State:
-        Position 41
-```
-
-### Event Category Concepts
-
-#### LifecycleEvent
-
-##### Description
-
-A LifecycleEvent represents an Event associated with a change in the lifecycle of a GameInstance. LifecycleEvents allow framework components and external systems to observe significant points in the lifetime of a game session, such as when a game is initialized, started, completed, or terminated. A LifecycleEvent describes a lifecycle change that has occurred and does not control execution, modify GameState, or determine game behavior.
-
-##### Responsibilities
-
-- represent GameInstance lifecycle activity
-- provide lifecycle information to event consumers
-- identify the GameInstance associated with the lifecycle event
-
-##### References
-
-- GameInstance
-- GameState
-
-##### Does Not Own
-
-- GameInstance
-- GameConfiguration
-- GameState
-- GameHistory
-- RulesEngine
-
-#### MoveEvent
-
-##### Description
-
-A MoveEvent represents an Event related to a Move during game execution. A MoveEvent allows framework components and external systems to observe the lifecycle of a Move, including when a Move is requested, submitted, accepted, or rejected. A MoveEvent does not determine whether a Move is valid, apply game rules, modify GameState, or control game execution. Move validation remains the responsibility of the RulesEngine.
-
-##### Responsibilities
-
-- represent activity related to a Move
-- provide Move lifecycle information to event consumers
-- identify the Move and execution context associated with the event
-
-##### References
-
-- Move
-- PlayerId
-- GameState
-
-##### Does Not Own
-
-- Move
-- Player
-- GameState
-- RulesEngine
-- MoveResolution
-- GameHistory
-
-#### StateTransitionEvent
-
-##### Description
-
-A StateTransitionEvent represents the creation of a new immutable GameState resulting from a successful state transition. A StateTransitionEvent is published after the RulesEngine evaluates a Move and produces a new GameState. The event records the completed transition but does not perform the transition or replace the authoritative GameState.
-
-##### References
-
-- GameState
-- Move
-- MoveResolution
-- RulesEngine
-
-##### Does Not Own
-
-- GameState
-- Move
-- MoveResolution
-- RulesEngine
-
-##### Relationship
-
-```text
-StateTransitionEvent
-
-    observes:
-        RulesEngine
-
-    records:
-        Previous GameState
-        New GameState
-        Move
-
-    consumed by:
-        Rendering Systems
-        Replay Systems
-        Network Systems
-```
-
-# Event Lifecycle
-
-Events follow the lifecycle of framework execution.
-
-A typical execution sequence is:
-
-```text
-GameEngine
-
-    |
-    | creates GameInstance
-    v
-
-GameStartedEvent
-
-    |
-    | requests Move
-    v
-
-MoveRequestedEvent
-
-    |
-    | receives Move
-    v
-
-MoveSubmittedEvent
-
-    |
-    | evaluates Move
-    v
-
-RulesEngine
-
-    |
-    | produces MoveResolution
-    v
-
-MoveAcceptedEvent
-
-    |
-    | creates new GameState
-    v
-
-StateTransitionEvent
-
-    |
-    | updates GameHistory
-    v
-
-Execution continues
-```
-
-Events are produced only after the associated operation has reached a meaningful execution point.
-
-Events do not represent possible future actions.
-
----
-
-# Event Publishing Responsibilities
-
-## GameEngine
-
-### Responsibility
-
-The `GameEngine` is the primary event publisher within the framework.
-
-The `GameEngine` publishes events related to execution coordination, including:
-
-- game lifecycle events
-- move lifecycle events
-- state transition events
-- execution status events
-
-The `GameEngine` is responsible for publishing events because it coordinates:
-
-- `GameInstance`
-- `RulesEngine`
-- `MoveProvider`
-- `GameHistory`
-
-The `GameEngine` does not create game-specific events describing rule behavior unless that behavior is part of the framework execution lifecycle.
-
----
-
-## RulesEngine
-
-### Responsibility
-
-The `RulesEngine` does not publish execution events directly.
-
-The `RulesEngine` evaluates moves and produces `MoveResolution` objects. The `GameEngine` interprets those results and publishes appropriate events.
-
-This preserves the stateless design of the `RulesEngine`.
-
-The relationship is:
-
-```text
-RulesEngine
-
-    receives:
-        GameState
-        Move
-
-    produces:
-        MoveResolution
-
-
-GameEngine
-
-    receives:
-        MoveResolution
-
-    publishes:
-        Events
-```
-
----
-
-## MoveProvider
-
-### Responsibility
-
-A `MoveProvider` does not publish framework execution events.
-
-A `MoveProvider` provides decisions to the `GameEngine`.
-
-The source of a move may be:
-
-- human input
-- artificial intelligence
-- network client
-- replay system
-- automated process
-
-The framework observes the resulting execution through events rather than requiring each provider type to implement event behavior.
-
----
-
-## External Systems
-
-External systems consume events but do not publish framework execution events.
-
-Examples:
-
-- rendering systems
-- network synchronization systems
-- replay recorders
-- analytics services
-- tournament infrastructure
-
-External systems may transform events into their own internal representations, but they do not influence framework execution through the event system.
-
----
-
-# Relationship Between Events and Immutable State
-
-Events and `GameState` serve different purposes.
-
-`GameState` represents the authoritative current condition of a game.
-
-Events represent observations about execution.
-
-The relationship is:
 
 ```text
 GameState
 
-    represents:
-        current truth
+    Contains:
+
+        GameObjectState:
+            Helm_001
+                Durability: 10
+
+            Helm_002
+                Durability: 5
 
 
-Event
+        GameObjectOwner:
+            Helm_001
+                Owner: Player_A
 
-    represents:
-        something that happened
+            Helm_002
+                Owner: Player_B
 ```
 
-A state transition produces both:
+#### Location
+
+##### Description
+
+A [Location](#location) represents an immutable instance of a [LocationType](#locationtype) within a game. A [Location](#location) defines the identity of a specific place where [GameObjects](#gameobject) and [Players](#player) may exist, such as a board position, inventory, territory, hand, deck, or discard pile. A [Location](#location) references the [LocationType](#locationtype) that describes its shared immutable characteristics. Mutable information associated with a [Location](#location) is represented separately by [LocationState](#locationstate).
+
+##### Owns
+
+- [LocationId](#locationid)
+
+##### References
+
+- [LocationType](#locationtype)
+
+##### Does Not Own
+
+- [LocationType](#locationtype)
+- [LocationState](#locationstate)
+- [GameState](#gamestate)
+- [GameObject](#gameobject)
+- [Player](#player)
+
+#### Player
+
+##### Description
+
+A [Player](#player) represents an entity that participates in a game. A [Player](#player) may represent a human participant or an automated participant. The Game Master is a special system entity used to represent objects, resources, and information controlled by the game itself. The Game Master is represented using a [PlayerId](#playerid) for ownership and control relationships, but it does not necessarily represent an actual player participating in the game.
+
+##### Owns
+
+- [PlayerId](#playerid)
+
+##### Does Not Own
+
+- [GameObject](#gameobject)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+- [GameState](#gamestate)
+
+##### Example
 
 ```text
-Move
- |
- v
-RulesEngine
- |
- v
-New GameState
- |
- +----------------+
- |                |
- v                v
+Player
 
-GameHistory     Event
+    Player_A
+        Id: Player_A
+        Name: Alice
+        Type: Human
+
+
+    Player_B
+        Id: Player_B
+        Name: Bob
+        Type: Human
+
+
+    Game_Master
+        Id: Game_Master
+        Name: Game Master
+        Type: System
 ```
 
-The `GameState` remains the source of truth.
+#### GameObject
 
-Events provide a chronological view of execution activity.
+##### Description
 
-Events must never be used as the authoritative representation of game state.
+A [GameObject](#gameobject) represents an immutable instance of a [GameObjectType](#gameobjecttype) that exists within a game. A [GameObject](#gameobject) defines the identity of a specific object and references the [GameObjectType](#gameobjecttype) that describes its shared immutable characteristics. Mutable information about an object is represented separately through state and relationship concepts such as [GameObjectState](#gameobjectstate), [GameObjectOwner](#gameobjectowner), and [GameObjectController](#gameobjectcontroller). A [GameObject](#gameobject) does not contain the current state of the object and does not directly own ownership or control relationships.
 
----
+##### Owns
 
-# Event Consumers
+- [GameObjectId](#gameobjectid)
 
-## Rendering Systems
+##### References
 
-Rendering systems consume events to update visual representations of the game.
+- [GameObjectType](#gameobjecttype)
 
-Examples:
+##### Does Not Own
 
-- object movement
-- piece placement changes
-- player status updates
-- animations
+- [GameObjectType](#gameobjecttype)
+- [GameObjectState](#gameobjectstate)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+- [GameState](#gamestate)
+- [Player](#player)
 
-Rendering systems should obtain current information from `GameState` and use events to determine what changed.
-
----
-
-## Network Systems
-
-Network systems consume events to synchronize game execution between connected systems.
-
-Examples:
-
-- broadcasting accepted moves
-- notifying clients of state transitions
-- updating spectators
-
-Network systems should not apply game logic based only on events.
-
-They should synchronize framework state.
-
----
-
-## Replay Systems
-
-Replay systems consume events to record execution history.
-
-Events may provide:
-
-- move sequence
-- state transition sequence
-- timing information
-- execution metadata
-
-Replay systems may reconstruct games by applying recorded moves through the appropriate `RulesEngine`.
-
----
-
-## Analytics Systems
-
-Analytics systems consume events to gather information about game execution.
-
-Examples:
-
-- move frequency
-- game duration
-- player decisions
-- performance statistics
-
-Analytics systems should not affect gameplay behavior.
-
----
-
-## Debugging Systems
-
-Debugging systems consume events to inspect framework execution.
-
-Examples:
-
-- execution tracing
-- move validation analysis
-- state transition inspection
-- error reporting
-
----
-
-## AI Systems
-
-AI systems may consume events to observe completed executions.
-
-Examples:
-
-- training data collection
-- evaluation metrics
-- simulation analysis
-
-AI decision-making systems receive game context through framework APIs such as `GameState`, not through events.
-
----
-
-# Integration Boundaries
-
-The event system creates a controlled communication boundary between the framework and external systems.
-
-The dependency direction is:
+##### Example
 
 ```text
-                Events
+GameObject
 
-                  ^
-                  |
+    Helm_001
+        Type: Iron Helm
 
-Rendering
-Networking
-Replay
-Analytics
-Debugging
-Tournament Systems
-
-
-                  ^
-                  |
-
-              GameEngine
-
-
-                  ^
-                  |
-
-          RulesEngine
-          GameInstance
-          GameState
+    Helm_002
+        Type: Iron Helm
 ```
 
-External systems depend on framework events.
+Helm_001 and Helm_002 are separate [GameObjects](#gameobject) with unique identities. Both reference the same [GameObjectType](#gameobjecttype) but represent different individual objects within the game.
 
-The framework does not depend on external systems.
+### Location State Concepts
 
----
+#### LocationState
 
-# Design Constraints
+##### Description
 
-The event system follows these constraints:
+[LocationState](#locationstate) represents the mutable state values associated with a specific [Location](#location) within a [GameState](#gamestate). These values may change throughout the course of a game as the result of domain actions. [LocationState](#locationstate) does not define the identity or immutable characteristics of a [Location](#location); it stores the current values required to represent that [Location](#location) at a specific point in time. [LocationState](#locationstate) is part of a [GameState](#gamestate) and is replaced whenever a new [GameState](#gamestate) is produced.
 
-## Events Are Immutable
+##### Contains
 
-Events represent completed observations and cannot be modified after creation.
+- mutable location state values
 
----
+##### References
 
-## Events Do Not Change State
+- [LocationId](#locationid)
 
-Events cannot directly modify:
+##### Does Not Own
 
-- `GameState`
-- `GameInstance`
-- `GameHistory`
-- domain entities
+- [Location](#location)
+- [LocationType](#locationtype)
+- [GameState](#gamestate)
 
-All state changes occur through the `RulesEngine`.
+### Player State Concepts
 
----
+#### PlayerState
 
-## Events Are Not Commands
+##### Description
 
-Events describe what happened.
+[PlayerState](#playerstate) represents the mutable state values associated with a specific [Player](#player) within a [GameState](#gamestate). These values may change throughout the course of a game as the result of domain actions. [PlayerState](#playerstate) does not define the identity of a [Player](#player) or the immutable characteristics of a participant; it stores the current values required to represent that [Player](#player)'s state at a specific point in time. [PlayerState](#playerstate) is part of a [GameState](#gamestate) and is replaced when a new [GameState](#gamestate) is produced.
 
-They do not request what should happen.
+##### Contains
 
-Examples:
+- mutable player state values
 
-Valid:
+##### References
+
+- [PlayerId](#playerid)
+
+##### Does Not Own
+
+- [Player](#player)
+- [PlayerId](#playerid)
+- [GameState](#gamestate)
+- [GameObject](#gameobject)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+
+##### Example
 
 ```text
-MoveAcceptedEvent
+PlayerState
 
-    Move:
-        e4
+    PlayerId:
+        Player_A
+
+    Attributes:
+
+        Health:
+            85 / 100
+
+        Strength:
+            14
+
+        Dexterity:
+            12
+
+        Intelligence:
+            16
+
+        Level:
+            5
+
+        Experience:
+            2400
+
+        Gold:
+            150
 ```
 
-Invalid:
+### Game Object State Concepts
+
+#### GameObjectState
+
+##### Description
+
+[GameObjectState](#gameobjectstate) represents the mutable state values associated with a specific [GameObject](#gameobject). These values may change throughout the course of a game as the result of domain actions. [GameObjectState](#gameobjectstate) does not define what properties a [GameObject](#gameobject) has; it stores the current values of those properties for an individual [GameObject](#gameobject). [GameObjectState](#gameobjectstate) is part of a [GameState](#gamestate) and is replaced when a new [GameState](#gamestate) is produced.
+
+##### Contains
+
+- stat values
+
+##### References
+
+- [GameObjectId](#gameobjectid)
+
+##### Does Not Own
+
+- [GameObject](#gameobject)
+- [GameObjectType](#gameobjecttype)
+- [GameState](#gamestate)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+
+##### Example
 
 ```text
-MoveEvent
+GameObjectState
 
-    Execute:
-        e4
+    Helm_001
+        Durability: 10
+
+    Helm_002
+        Durability: 5
 ```
 
----
+Both [GameObjects](#gameobject) share the same [GameObjectType](#gameobjecttype) but maintain separate mutable stats.
 
-## Events Do Not Replace History
+### Game Object Relationship Concepts
 
-`GameHistory` represents the ordered sequence of accepted moves.
+#### GameObjectOwner
 
-Events represent broader execution observations.
+##### Description
 
-A replay system may use events, but the authoritative game progression remains based on:
+[GameObjectOwner](#gameobjectowner) represents the ownership relationship between a [GameObject](#gameobject) and a [Player](#player). Every [GameObject](#gameobject) has exactly one owner. The owner may be a human player, an automated participant, or a system-controlled participant such as the Game Master. Ownership may change throughout the course of a game as the result of domain actions. Ownership is independent from control and does not grant control automatically.
 
-- initial `GameState`
-- accepted `Moves`
-- `RulesEngine`
+##### References
 
----
+- [PlayerId](#playerid)
+- [GameObjectId](#gameobjectid)
 
-## Events Must Preserve Determinism
+##### Does Not Own
 
-Given identical inputs and execution conditions, the framework should produce the same state transitions and corresponding events.
+- [GameObject](#gameobject)
+- [Player](#player)
+- [GameObjectController](#gameobjectcontroller)
 
-Events should contain deterministic information wherever possible.
-
----
-
-# Example Event Flow
-
-A complete move execution flow:
+##### Example
 
 ```text
-1. GameEngine requests a move
+GameObjectOwner
 
-    Event:
-        MoveRequestedEvent
+    Helm_001
+        Owner: Player_A
 
-
-2. MoveProvider returns a move
-
-    Event:
-        MoveSubmittedEvent
-
-
-3. GameEngine submits move to RulesEngine
-
-
-4. RulesEngine evaluates move
-
-
-5. RulesEngine produces MoveResolution
-
-
-6. GameEngine receives accepted resolution
-
-    Event:
-        MoveAcceptedEvent
-
-
-7. GameEngine replaces current GameState
-
-
-8. GameEngine updates GameHistory
-
-
-9. GameEngine publishes:
-
-    StateTransitionEvent
-
-
-10. External systems consume events
-
-    Rendering:
-        update display
-
-    Replay:
-        record transition
-
-    Network:
-        synchronize clients
-
-    Analytics:
-        record statistics
+    Helm_002
+        Owner: Player_B
 ```
 
-The event model provides observation and integration without weakening the framework's core guarantees of immutable state, deterministic execution, and controlled state transitions.
+Ownership is independent for each [GameObject](#gameobject) instance, even when the [GameObjects](#gameobject) share the same [GameObjectType](#gameobjecttype).
+
+#### GameObjectController
+
+##### Description
+
+[GameObjectController](#gameobjectcontroller) represents the control relationship between a [GameObject](#gameobject) and one or more [Players](#player). Controllers identify the [Players](#player) that are currently able to act on behalf of a [GameObject](#gameobject) through domain actions. Control is independent from ownership and may change throughout the course of a game as the result of domain actions. A [GameObject](#gameobject) may have multiple controllers, and a controller does not imply ownership of the [GameObject](#gameobject).
+
+##### References
+
+- [PlayerId](#playerid)
+- [GameObjectId](#gameobjectid)
+
+##### Does Not Own
+
+- [GameObject](#gameobject)
+- [Player](#player)
+- [GameObjectOwner](#gameobjectowner)
+
+##### Example
+
+```text
+GameObjectController
+
+    Helm_001
+        Controllers:
+            Player_A
+
+    Tent_001:
+        Player_A, Player_B
+```
+
+### Action Concepts
+
+#### Move
+
+##### Description
+
+A [Move](#move) represents an immutable request to perform a domain action that may transform one [GameState](#gamestate) into another. A [Move](#move) describes an intended change and contains the information required by the [RulesEngine](#rulesengine) to evaluate that change. A [Move](#move) does not directly modify a [GameState](#gamestate) and does not indicate whether the requested action is valid or has occurred. The [RulesEngine](#rulesengine) evaluates the [Move](#move) and produces a [MoveResolution](#moveresolution) describing the result.
+
+##### Owns
+
+- [Move](#move) parameters
+
+##### References
+
+- [PlayerId](#playerid)
+- [GameObjectId](#gameobjectid)
+
+##### Uses
+
+- [GameState](#gamestate)
+
+##### Does Not Own
+
+- [Player](#player)
+- [GameObject](#gameobject)
+- [GameState](#gamestate)
+- [GameDefinition](#gamedefinition)
+- [MoveResolution](#moveresolution)
+- [GameHistory](#gamehistory)
+
+#### MoveResolution
+
+##### Description
+
+A [MoveResolution](#moveresolution) represents the result of evaluating a [Move](#move) against a [GameState](#gamestate). A [MoveResolution](#moveresolution) always contains a [GameState](#gamestate) representing the current state after resolution. If a [Move](#move) is accepted, the [GameState](#gamestate) is a new immutable snapshot produced by the [RulesEngine](#rulesengine). If a [Move](#move) is rejected, the [GameState](#gamestate) is the original unchanged snapshot and the [MoveResolution](#moveresolution) contains the reasons the [Move](#move) was not accepted. A [MoveResolution](#moveresolution) does not modify a [Move](#move) or a [GameState](#gamestate).
+
+##### Owns
+
+- ResolutionStatus
+- ValidationErrors
+
+##### References
+
+- [Move](#move)
+- [GameState](#gamestate)
+
+##### Does Not Own
+
+- [Move](#move)
+- [GameState](#gamestate)
+- [RulesEngine](#rulesengine)
+
+### Identity Concepts
+
+#### LocationId
+
+##### Description
+
+A [LocationId](#locationid) uniquely identifies a [Location](#location) within a domain. A [LocationId](#locationid) is immutable and remains associated with the same [Location](#location) for the lifetime of the [Location](#location). A [LocationId](#locationid) does not represent a [Location](#location) and does not contain information about the location's properties, contents, or current state.
+
+##### Owns
+
+- unique identifier value
+
+##### Does Not Own
+
+- [Location](#location)
+- [LocationState](#locationstate)
+
+#### PlayerId
+
+##### Description
+
+A [PlayerId](#playerid) uniquely identifies a [Player](#player) within a domain. A [PlayerId](#playerid) is immutable and remains associated with the same [Player](#player) for the lifetime of the [Player](#player). A [PlayerId](#playerid) does not represent a [Player](#player) and does not contain any information about the [Player](#player)'s attributes, state, ownership, or relationships.
+
+##### Owns
+
+- unique identifier value
+
+##### Does Not Own
+
+- [Player](#player)
+- [GameObject](#gameobject)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+
+##### Example
+
+```text
+PlayerId
+
+    Player_A
+    Player_B
+```
+
+Each [Player](#player) has a unique [PlayerId](#playerid).
+
+[PlayerId](#playerid) is used by domain relationships to identify [Players](#player) without requiring a direct reference to the [Player](#player) entity.
+
+#### GameObjectId
+
+##### Description
+
+A [GameObjectId](#gameobjectid) uniquely identifies a [GameObject](#gameobject) within a domain. A [GameObjectId](#gameobjectid) is immutable and remains associated with the same [GameObject](#gameobject) for the lifetime of the object. A [GameObjectId](#gameobjectid) does not represent a [GameObject](#gameobject) and does not contain information about the object's type, state, ownership, control, or relationships.
+
+##### Owns
+
+- unique identifier value
+
+##### Does Not Own
+
+- [GameObject](#gameobject)
+- [GameObjectType](#gameobjecttype)
+- [GameObjectState](#gameobjectstate)
+- [GameObjectOwner](#gameobjectowner)
+- [GameObjectController](#gameobjectcontroller)
+
+##### Example
+
+```text
+GameObjectId
+
+    Helm_001
+    Helm_002
+```
+
+Each [GameObject](#gameobject) has a unique [GameObjectId](#gameobjectid).
+
+[GameObjectId](#gameobjectid) is used by domain relationships and state components to identify specific [GameObjects](#gameobject) without requiring direct references to the [GameObject](#gameobject) entity.
+
+### Domain Service Concepts
+
+#### RulesEngine
+
+##### Description
+
+A [RulesEngine](#rulesengine) defines the game-specific behavior required to interpret [GameStates](#gamestate), evaluate [Moves](#move), and produce resulting [GameStates](#gamestate). It is stateless and does not own game state or game progression. Given a [GameState](#gamestate), a [RulesEngine](#rulesengine) can determine the set of legal [Moves](#move) available from that state. This capability allows game states to be explored by simulation systems and AI search algorithms such as Minimax and Monte Carlo Tree Search. Given a [GameState](#gamestate) and [Move](#move), the [RulesEngine](#rulesengine) evaluates the requested action and produces a [MoveResolution](#moveresolution) describing the result of the evaluation. The [RulesEngine](#rulesengine) never modifies existing [GameStates](#gamestate), stores current state, or maintains game history.
+
+##### References
+
+- [GameDefinition](#gamedefinition)
+
+##### Uses
+
+- [GameState](#gamestate)
+- [Move](#move)
+
+##### Creates
+
+- [MoveResolution](#moveresolution)
+- [GameState](#gamestate)
+- [Move](#move)
+
+##### Does Not Own
+
+- [GameDefinition](#gamedefinition)
+- [GameConfiguration](#gameconfiguration)
+- [GameState](#gamestate)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [GameHistory](#gamehistory)
+
+## Execution Services
+
+### Execution Service Concepts
+
+#### GameEngine
+
+##### Description
+
+A [GameEngine](#gameengine) is a framework service responsible for coordinating the execution of a game session. A [GameEngine](#gameengine) manages the execution lifecycle by requesting [Moves](#moves) from a [MoveProvider](#moveprovider), submitting [Moves](#moves) and the current [GameState](#gamestate) to the [RulesEngine](#rulesengine) for evaluation, processing [MoveResolutions](#moveresolutions), advancing the [GameInstance](#gameinstance) to resulting immutable [GameStates](#gamestates), and recording accepted [Moves](#moves) in [GameHistory](#gamehistory). A [GameEngine](#gameengine) does not contain game-specific rules, interpret the meaning of [Moves](#moves), or modify existing [GameStates](#gamestates). Instead, it coordinates the interaction between execution components and domain concepts while preserving the framework guarantees of immutable state transitions and deterministic execution.
+
+##### Responsibilities
+
+- coordinate game execution
+- manage the execution lifecycle of a [GameInstance](#gameinstance)
+- request [Moves](#moves) from [MoveProviders](#moveproviders)
+- provide the current [GameState](#gamestate) as decision context
+- submit [Moves](#moves) and [GameStates](#gamestates) to the [RulesEngine](#rulesengine)
+- process [MoveResolutions](#moveresolutions)
+- advance the [GameInstance](#gameinstance) to resulting immutable [GameStates](#gamestates)
+- record accepted [Moves](#moves) in [GameHistory](#gamehistory)
+- detect when execution reaches a terminal state
+
+##### References
+
+- [GameInstance](#gameinstance)
+- [RulesEngine](#rulesengine)
+- [MoveProvider](#moveprovider)
+- [GameHistory](#gamehistory)
+- [GameState](#gamestate)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+
+##### Does Not Own
+
+- [GameDefinition](#gamedefinition)
+- [GameConfiguration](#gameconfiguration)
+- [RulesEngine](#rulesengine)
+- [GameState](#gamestate)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [MoveProvider](#moveprovider)
+- [GameHistory](#gamehistory)
+- [GameObject](#gameobject)
+- [Player](#player)
+
+##### Relationship
+
+```text
+GameEngine
+
+    coordinates:
+        GameInstance
+
+    using:
+        RulesEngine
+        MoveProvider
+
+    records:
+        GameHistory
+```
+
+#### MoveProvider
+
+##### Description
+
+A [MoveProvider](#moveprovider) is an execution abstraction responsible for supplying [Moves](#moves) to a [GameEngine](#gameengine) during game execution. A [MoveProvider](#moveprovider) represents the source of a decision within a game session and may be implemented by a human player interface, artificial intelligence agent, network client, replay system, automated test, or other decision-making system. A [MoveProvider](#moveprovider) receives the current [GameState](#gamestate) as decision context and produces a [Move](#move) representing an intended action. It does not evaluate whether a [Move](#move) is valid, apply game rules, modify [GameStates](#gamestates), or control execution. [Moves](#moves) are evaluated by the [RulesEngine](#rulesengine) through the [GameEngine](#gameengine).
+
+##### Responsibilities
+
+- supply [Moves](#moves) during game execution
+- receive the current [GameState](#gamestate) as decision context
+- produce a [Move](#move) representing an intended action
+- support different sources of decision making
+
+##### References
+
+- [GameEngine](#gameengine)
+- [GameState](#gamestate)
+- [Move](#move)
+- [Player](#player)
+
+##### Does Not Own
+
+- [GameDefinition](#gamedefinition)
+- [GameConfiguration](#gameconfiguration)
+- [GameInstance](#gameinstance)
+- [GameState](#gamestate)
+- [RulesEngine](#rulesengine)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [GameHistory](#gamehistory)
+- [GameObject](#gameobject)
+- [Location](#location)
+
+##### Relationship
+
+```text
+MoveProvider
+
+    supplies:
+        Move
+
+    to:
+        GameEngine
+
+    using:
+        GameState
+```
+
+## Event Services
+
+### Game Lifecycle Event Concepts
+
+#### GameInitializedEvent
+
+##### Description
+
+A [GameInitializedEvent](#gameinitializedevent) represents an immutable notification that a [GameInstance](#gameinstance) has been initialized and is ready for game execution. A [GameInitializedEvent](#gameinitializedevent) indicates that game initialization has completed but does not itself create, modify, or control the [GameInstance](#gameinstance) or its [GameState](#gamestate).
+
+##### Owns
+
+- event information
+
+##### Does Not Own
+
+- [GameInstance](#gameinstance)
+- [GameDefinition](#gamedefinition)
+- [GameConfiguration](#gameconfiguration)
+- [GameState](#gamestate)
+- [GameEngine](#gameengine)
+- [RulesEngine](#rulesengine)
+
+#### TerminalStateReachedEvent
+
+##### Description
+
+A [TerminalStateReachedEvent](#terminalstatereachedevent) represents an immutable notification that a [GameInstance](#gameinstance) has reached a terminal [GameState](#gamestate). It indicates that game execution has reached a state in which no further moves are expected to be executed. A [TerminalStateReachedEvent](#terminalstatereachedevent) does not determine whether a [GameState](#gamestate) is terminal, modify the [GameState](#gamestate), or control game execution.
+
+##### Owns
+
+- event information
+
+##### Does Not Own
+
+- [GameInstance](#gameinstance)
+- [GameState](#gamestate)
+- [Move](#move)
+- [GameEngine](#gameengine)
+- [RulesEngine](#rulesengine)
+
+### Move Event Concepts
+
+#### MoveAcquiredEvent
+
+##### Description
+
+A [MoveAcquiredEvent](#moveacquiredevent) represents an immutable notification that a [Move](#move) has been acquired for evaluation during game execution. It indicates that the [GameEngine](#gameengine) has received a [Move](#move) from a [MoveProvider](#moveprovider) and that the [Move](#move) is ready to be evaluated by the [RulesEngine](#rulesengine). A [MoveAcquiredEvent](#moveacquiredevent) does not determine whether the [Move](#move) is valid, modify the [GameState](#gamestate), or apply game rules.
+
+##### Owns
+
+- event information
+
+##### Does Not Own
+
+- [Move](#move)
+- [GameState](#gamestate)
+- [MoveProvider](#moveprovider)
+- [GameEngine](#gameengine)
+- [RulesEngine](#rulesengine)
+
+#### MoveResolutionEvent
+
+##### Description
+
+A [MoveResolutionEvent](#moveresolutionevent) represents an immutable notification that a [Move](#move) has been evaluated by the [RulesEngine](#rulesengine) and that a [MoveResolution](#moveresolution) has been produced. It indicates the result of evaluating the [Move](#move), including whether the [Move](#move) was accepted or rejected. A [MoveResolutionEvent](#moveresolutionevent) does not modify the [GameState](#gamestate) or apply the [Move](#move) itself.
+
+##### Owns
+
+- event information
+
+##### References
+
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+
+##### Does Not Own
+
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [GameState](#gamestate)
+- [RulesEngine](#rulesengine)
+- [GameEngine](#gameengine)
+
+### State Event Concepts
+
+#### StateUpdatedEvent
+
+##### Description
+
+A [StateUpdatedEvent](#stateupdatedevent) represents an immutable notification that the current [GameState](#gamestate) of a [GameInstance](#gameinstance) has been replaced by a new immutable [GameState](#gamestate). It indicates that the new [GameState](#gamestate) was established either during game initialization or as the result of an accepted [Move](#move). A [StateUpdatedEvent](#stateupdatedevent) does not modify the [GameState](#gamestate) or determine whether a state transition should occur.
+
+##### Owns
+
+- event information
+
+##### References
+
+- [GameState](#gamestate)
+
+##### Does Not Own
+
+- [GameInstance](#gameinstance)
+- [GameState](#gamestate)
+- [Move](#move)
+- [MoveResolution](#moveresolution)
+- [RulesEngine](#rulesengine)
+- [GameEngine](#gameengine)
 
